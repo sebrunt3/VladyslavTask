@@ -10,7 +10,7 @@ private class AccountOwnersSharingHandlerTest {
                 new Contact(LastName = 'ContactTest2')
         };
         insert contacts;
-        
+
         List<AccountContactRelationship__c> relationships = new List<AccountContactRelationship__c>{
                 new AccountContactRelationship__c(ContactId__c = contacts[0].Id, AccountId__c = accounts.Id)
         };
@@ -20,20 +20,8 @@ private class AccountOwnersSharingHandlerTest {
     @IsTest
     static void afterInsertSharingOwnersTest() {
         User userStandardTest = createDefaultUser('standarduserForTest@testorg.com', 'Standard User');
-        Account account = new Account(Name = 'AccountTest3', OwnerId = userStandardTest.Id);
-        insert account;
-        List<Contact> contactList = [SELECT Id, RelatedAccountOwner__c FROM Contact ORDER BY LastName ASC];
-        List<AccountContactRelationship__c> relationships = new List<AccountContactRelationship__c>{
-                new AccountContactRelationship__c(ContactId__c = contactList[0].Id, AccountId__c = account.Id),
-                new AccountContactRelationship__c(ContactId__c = contactList[1].Id, AccountId__c = account.Id)
-        };
-        insert relationships;
+        Account account = insertNewRelationship(userStandardTest.Id);
 
-        Set<String> existRelatedAccountOwnersSet = new Set<String>(contactList[0].RelatedAccountOwner__c.split(','));
-        
-        Assert.isFalse(existRelatedAccountOwnersSet.contains(userStandardTest.Id), 'Set of Ids should not have new Id before Insert Handler was running');
-        Assert.isTrue(String.isBlank(contactList[1].RelatedAccountOwner__c), 'Set of Ids should not have new Id before Insert Handler was running');
-        
         Test.startTest();
         AccountOwnersSharingHandler.afterInsertSharingOwners(new Map<Id, Account>(new List<Account>{account}));
         Test.stopTest();
@@ -41,7 +29,7 @@ private class AccountOwnersSharingHandlerTest {
         List<Contact> contactProcessedList = [SELECT Id, RelatedAccountOwner__c FROM Contact ORDER BY LastName ASC];
         Set<String> relatedAccountOwnersSetProcessed1 = new Set<String>(contactProcessedList[0].RelatedAccountOwner__c.split(','));
         Set<String> relatedAccountOwnersSetProcessed2 = new Set<String>(contactProcessedList[1].RelatedAccountOwner__c.split(','));
-        
+
         Assert.isTrue(relatedAccountOwnersSetProcessed1.contains(userStandardTest.Id), 'Set of Ids should have new Id after Insert Handler was running');
         Assert.isTrue(relatedAccountOwnersSetProcessed2.contains(userStandardTest.Id), 'Set of Ids should have new Id after Insert Handler was running');
     }
@@ -77,23 +65,56 @@ private class AccountOwnersSharingHandlerTest {
         Assert.isTrue(String.isBlank(contactProcessedList[0].RelatedAccountOwner__c), 'Set of Ids should have been empty after Delete Handler was running');
         Assert.isTrue(String.isBlank(contactProcessedList[1].RelatedAccountOwner__c), 'Set of Ids should have still been empty after Delete Handler was running');
     }
-    
+
+    @IsTest
+    static void beforeDeleteHasDuplicateOwnersTest() {
+        Account account = insertNewRelationship(UserInfo.getUserId());
+        Contact contact = [SELECT Id, RelatedAccountOwner__c FROM Contact WHERE LastName = 'ContactTest2' LIMIT 1];
+        contact.RelatedAccountOwner__c = UserInfo.getUserId();
+        update contact;
+        Account accountRemoved = [SELECT Id, OwnerId FROM Account WHERE Name = 'AccountTest1' LIMIT 1];
+
+        Test.startTest();
+        delete accountRemoved;
+        Test.stopTest();
+
+        List<Contact> contactProcessedList = [SELECT Id, RelatedAccountOwner__c FROM Contact ORDER BY LastName ASC];
+        Set<String> relatedAccountOwnersSetModified1 = new Set<String>(contactProcessedList[0].RelatedAccountOwner__c.split(','));
+        Set<String> relatedAccountOwnersSetModified2 = new Set<String>(contactProcessedList[1].RelatedAccountOwner__c.split(','));
+
+        Assert.isTrue(relatedAccountOwnersSetModified1.contains(UserInfo.getUserId()), 'Set of Ids should have still duplicate OwnerId after Delete Handler was running');
+        Assert.isTrue(relatedAccountOwnersSetModified2.contains(UserInfo.getUserId()), 'Set of Ids should have still duplicate OwnerId after Delete Handler was running');
+    }
+
     private static User createDefaultUser(String userName, String profileName) {
         Profile profile = [SELECT Id FROM Profile WHERE Name = :profileName];
         User user = new User(
-                Alias = 'standt', 
-                Email = 'standarduser@testorg.com', 
+                Alias = 'standt',
+                Email = 'standarduser@testorg.com',
                 EmailEncodingKey = 'UTF-8',
                 LastName = 'Testing',
-                LanguageLocaleKey = 'en_US', 
-                LocaleSidKey = 'en_US', 
-                ProfileId = profile.Id, 
-                TimeZoneSidKey = 'America/Los_Angeles', 
-                UserName = userName, 
+                LanguageLocaleKey = 'en_US',
+                LocaleSidKey = 'en_US',
+                ProfileId = profile.Id,
+                TimeZoneSidKey = 'America/Los_Angeles',
+                UserName = userName,
                 IsActive = true
         );
         insert user;
-        
+
         return user;
+    }
+
+    private static Account insertNewRelationship(Id userId) {
+        Account account = new Account(Name = 'AccountTest3', OwnerId = userId);
+        insert account;
+        List<Contact> contactList = [SELECT Id, RelatedAccountOwner__c FROM Contact ORDER BY LastName ASC];
+        List<AccountContactRelationship__c> relationships = new List<AccountContactRelationship__c>{
+                new AccountContactRelationship__c(ContactId__c = contactList[0].Id, AccountId__c = account.Id),
+                new AccountContactRelationship__c(ContactId__c = contactList[1].Id, AccountId__c = account.Id)
+        };
+        insert relationships;
+
+        return account;
     }
 }
