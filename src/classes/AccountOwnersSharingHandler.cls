@@ -51,11 +51,10 @@ public with sharing class AccountOwnersSharingHandler {
     private static Map<Id, List<Account>> getMapRelatedContactToAccount(Map<Id, Account> accountMap) {
         Map<Id, List<Account>> relatedContactToAccount = new Map<Id, List<Account>>();
 
-        Set<Id> accountIds = new Set<Id>(accountMap.keySet());
         List<AccountContactRelationship__c> accountContactRelationships = [
                 SELECT ContactId__c, AccountId__c
                 FROM AccountContactRelationship__c
-                WHERE AccountId__c IN :accountIds
+                WHERE AccountId__c IN :accountMap.keySet()
         ];
 
         for (AccountContactRelationship__c accContRelationship : accountContactRelationships) {
@@ -68,7 +67,7 @@ public with sharing class AccountOwnersSharingHandler {
         return relatedContactToAccount;
     }
 
-    // Method to update the RelatedAccountOwner__c field on Contact records
+    // Method to query all Contact records related to Owners
     private static List<Contact> queryContactRelatedOwners(Map<Id, List<Account>> relatedContactToAccount) {
         return [
                 SELECT Id, RelatedAccountOwner__c
@@ -77,9 +76,11 @@ public with sharing class AccountOwnersSharingHandler {
         ];
     }
 
+    // Method to invoke in Insert context and add new Owners records in RelatedAccountOwner__c field
     private static void addContactRelatedOwners(Map<Id, List<Account>> relatedContactToAccount, List<Contact> contactsToUpdate) {
         for (Contact contact : contactsToUpdate) {
-            Set<String> relatedAccountOwnersSet = new Set<String>(contact.RelatedAccountOwner__c.split(','));
+            Set<String> relatedAccountOwnersSet = String.isBlank(contact.RelatedAccountOwner__c) ?
+            new Set<String>() : new Set<String>(contact.RelatedAccountOwner__c.split(','));
 
             for (Account account : relatedContactToAccount.get(contact.Id)) {
                 relatedAccountOwnersSet.add(account.OwnerId);
@@ -91,9 +92,11 @@ public with sharing class AccountOwnersSharingHandler {
         update contactsToUpdate;
     }
 
+    // Method to invoke in Delete context and remove Owners records in RelatedAccountOwner__c field
     private static void removeContactRelatedOwners(Map<Id, List<Account>> relatedContactToAccount, List<Contact> contactsToUpdate) {
         for (Contact contact : contactsToUpdate) {
-            Set<String> relatedAccountOwnersSet = new Set<String>(contact.RelatedAccountOwner__c.split(','));
+            Set<String> relatedAccountOwnersSet = String.isBlank(contact.RelatedAccountOwner__c) ?
+                    new Set<String>() : new Set<String>(contact.RelatedAccountOwner__c.split(','));
 
             for (Account account : relatedContactToAccount.get(contact.Id)) {
                 relatedAccountOwnersSet.remove(account.OwnerId);
@@ -105,9 +108,11 @@ public with sharing class AccountOwnersSharingHandler {
         update contactsToUpdate;
     }
 
+    // Method to invoke in Update context and update Owners records in RelatedAccountOwner__c field
     private static void updateContactRelatedOwners(Map<Id, List<Account>> relatedContactToAccount, Map<Id, Account> accountOldMap, List<Contact> contactsToUpdate) {
         for (Contact contact : contactsToUpdate) {
-            Set<String> relatedAccountOwnersSet = new Set<String>(contact.RelatedAccountOwner__c.split(','));
+            Set<String> relatedAccountOwnersSet = String.isBlank(contact.RelatedAccountOwner__c) ?
+                    new Set<String>() : new Set<String>(contact.RelatedAccountOwner__c.split(','));
 
             for (Account account : relatedContactToAccount.get(contact.Id)) { 
                 if (account.OwnerId != accountOldMap.get(account.Id).OwnerId) {
